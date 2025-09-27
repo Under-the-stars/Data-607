@@ -1,0 +1,330 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+## 3.2.5 Exercises
+### Q1)
+```{r}
+library(dplyr)
+
+# 1. Had an arrival delay of two or more hours
+flights %>%
+  filter(arr_delay >= 120)
+
+# 2. Flew to Houston (IAH or HOU)
+flights %>%
+  filter(dest %in% c("IAH", "HOU"))
+
+# 3. Were operated by United, American, or Delta
+flights %>%
+  filter(carrier %in% c("UA", "AA", "DL"))
+
+# 4. Departed in summer (July, August, and September)
+flights %>%
+  filter(month %in% c(7, 8, 9))
+
+# 5. Arrived more than two hours late but didn’t leave late
+flights %>%
+  filter(arr_delay > 120, dep_delay <= 0)
+
+# 6. Were delayed by at least an hour, but made up over 30 minutes in flight
+flights %>%
+  filter(dep_delay >= 60, dep_delay - arr_delay > 30)
+
+```
+
+
+### Q2)
+```{r}
+
+flights %>%
+  arrange(desc(dep_delay))
+
+flights %>%
+  arrange(dep_time)
+
+```
+
+### Q4)
+```{r}
+flights %>%
+  count(year, month,day) %>%
+  summarise(all_days = all(n>0))
+
+  
+
+```
+
+
+## 3.3.5 Exercise 
+
+### Q1)
+
+dep_delay = dep_time - shed_dep_time
+dep_delay is the difference between the scheduled departure time and departure time indicating the difference or the delay in the departure of the flight. 
+
+
+### Q2)
+Select command extracts the column which are specified from the entire dataset. So despite of repeating the same column name withing the select() statement it will extract that column only once and automatically ignore the repeatation. As demonstrated below
+```{r}
+
+flights %>%
+  select(dep_delay, dep_delay, dep_delay)%>%
+  select(dep_delay)
+
+```
+
+### Q3) 
+
+any_of() lets me pass the vector column names to select(). This se;ect all those columns that are present in the dataset and ignore the ones which are not. 
+Now in this :
+variables <- c("year", "month", "day", "dep_delay", "arr_delay")
+
+### Q4)
+on using the any_of() within select will help us select all those which are present in the Flights table. 
+As shown below all the columns that are present in flights table are shown in the output. Here in this case all the columns are present in the flights table. 
+
+```{r}
+
+variables <- c("year", "month", "day", "dep_delay", "arr_delay")
+
+flights %>%
+  select(any_of(variables))
+```
+
+
+### Q5) 
+Yes on running this code I am surprised to see that any column name that consits of 'time' irrespective of it being a prefix, suffix, uppercase or lower case, the results have shown all the columns consisting of the word 'time' is selected. 
+
+```{r}
+
+flights |> select(contains("TIME"))
+```
+
+Helpers like contains() in this case is by default case-sensitive. It will match any word that matches with the value inserted in it. Like "TIME" here, eventhough it is in all uppercase helpers are still able to match column names like sched_dep_time , arr_time. Both of these columns have 'time' term. The select() is used for selecting those columns which have been mentioned within the brackets. So on combining both select and helpers we can attain the desired results without worrying about case sensitivity. 
+
+we can change that default by: 
+flights |> select(contains("TIME", ignore.case = FALSE) 
+so here TIME would only match the ones with uppercase column names. 
+
+```{r}
+flights |> select(contains("TIME", ignore.case = FALSE))
+
+
+```
+
+### Q6)
+```{r}
+flights %>%
+  rename(air_time_min = air_time )%>%
+  relocate(air_time_min)
+  
+
+  
+
+```
+
+## 3.5.7
+
+### Q1
+```{r}
+flights %>%
+  group_by(carrier)%>%
+  summarise(
+    avg = mean(arr_delay, na.rm = TRUE),
+    num = n()
+    
+  ) %>% 
+  arrange(desc(avg))
+```
+
+### Q2) 
+```{r}
+flights %>%
+  group_by(dest,flight)%>%
+  summarise(
+    delay = mean(dep_delay, na.rm = TRUE),
+    
+  )%>%
+  arrange(desc(delay))
+  
+
+
+
+```
+
+
+### Q5) 
+
+Count() groups the data by one or more variables and counts the number of rows in each group. Count() by default lists the result in the dataset's order. On adding sort = TRUE it sorts the results in descending order of n (largest first)
+
+```{r}
+flights %>% count(carrier, sort = TRUE)
+
+
+```
+
+
+### Q6) 
+
+a)
+
+group_by() divides the dataset into groups meaningful to analysis. group_by() adds grouped features to the data frame which changes behaviour of the subsequent verbs applied to the data.  So on running df |> group_by(y) we will see a table where the data will be arranged according to y column. 
+```{r}
+
+df <- tibble(
+  x = 1:5,
+  y = c("a", "b", "a", "a", "b"),
+  z = c("K", "K", "L", "L", "K")
+)
+
+df |> group_by(y)
+
+
+```
+
+b) I think the output of df |>
+  arrange(y) will result in the sorting of column 'y' in ascending order making other columns rows to be arranged according to column 'y'. 
+  
+group_by() does not sort or change the values in the tibble instead adds grouped features to the data frame which changes behaviour of the subsequent verbs applied to the data. Where as arrange() is responsible for changing order of rows in the table. It just sorts the rows by column values without worrying about adding grouping info. 
+```{r}
+
+df |>
+  arrange(y)
+```
+
+c) We are treating rows with the same 'y' column values as a group. so here there are 2 distinct values in column 'y' a and b. y = a --> rows (x = 1,3,4) and y = b --> rows (x= 2,5). Now for each group the summarize(mean_x = mean(x)) is calculating mean of x. 
+
+What the pipeline does?
+
+1. Groups the dataset by y.
+2. Summarizes each group by computing the mean of column x.
+3. Result: a collapsed tibble with one row per y group.
+
+```{r}
+df |>
+  group_by(y) |>
+  summarize(mean_x = mean(x))
+```
+
+d) Here it is grouped by both the columns y and z. We are considering distinct values of both the columns so:
+So groups are defined by each unique combination of (y, z):
+
+Group (a, K): row 1 → x = 1
+
+Group (a, L): rows 3 & 4 → x = 3, 4
+
+Group (b, K): rows 2 & 5 → x = 2, 5
+
+and 
+
+summarize(mean_x = mean(x))
+
+(a, K): mean(1) = 1.0
+
+(a, L): mean(3, 4) = 3.5
+
+(b, K): mean(2, 5) = 3.5
+
+What the pipeline does?
+
+Groups the data by both y and z.
+Computes the mean of x for each group.
+Returns one row per unique (y, z) combination.
+```{r}
+df |>
+  group_by(y, z) |>
+  summarize(mean_x = mean(x))
+```
+
+e) Here : 
+group_by(y, z)
+
+Groups by the pair (y, z):
+
+(a, K): row 1 → x = 1
+
+(a, L): rows 3 & 4 → x = 3, 4
+
+(b, K): rows 2 & 5 → x = 2, 5
+
+summarize(mean_x = mean(x), .groups = "drop")
+
+(a, K): mean(1) = 1.0
+
+(a, L): mean(3, 4) = 3.5
+
+(b, K): mean(2, 5) = 3.5
+
+.groups = "drop" tells dplyr to remove all grouping after summarization.
+
+
+What the pipeline does?
+
+Groups rows by the combination of y and z.
+Computes the mean of x within each group.
+Returns one row per unique (y, z) pair.
+Drops all grouping information afterwards.
+
+```{r}
+
+df |>
+  group_by(y, z) |>
+  summarize(mean_x = mean(x), .groups = "drop")
+
+```
+
+f) Pipeline 1: summarize()
+```{r}
+df |>
+  group_by(y, z) |>
+  summarize(mean_x = mean(x))
+```
+Groups by (y, z) → 3 groups:
+
+(a, K): row 1 → x = 1
+
+(a, L): rows 3, 4 → x = 3, 4
+
+(b, K): rows 2, 5 → x = 2, 5
+
+Summarize each group by mean of x:
+
+(a, K) → 1
+
+(a, L) → 3.5
+
+(b, K) → 3.5
+
+-->  Collapses each group into one row per (y,z) combination.
+
+
+Pipeline 2: mutate()
+
+```{r}
+df |>
+  group_by(y, z) |>
+  mutate(mean_x = mean(x))
+```
+
+Groups are the same (a,K), (a,L), (b,K).
+
+mutate() adds a new column mean_x, repeating the group mean across all rows in the group:
+
+(a, K): row 1 → mean_x = 1
+
+(a, L): rows 3, 4 → mean_x = 3.5
+
+(b, K): rows 2, 5 → mean_x = 3.5
+
+--> This keeps all original rows, but appends the group mean to each row.
+
+difference between outputs:
+
+summarize() --> collapses one row per group. 
+and 
+mutate() --> expands by keeping all rows, but appends a new column to the dataset. 
+
+

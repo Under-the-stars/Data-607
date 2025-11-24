@@ -1,0 +1,39 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+```{r}
+
+approx_pi = function(x){
+  return(sqrt(1-x^2))
+}
+
+monte_carlo = function(sample_size = 1000){
+  # so now that we have set a same seed we will get the same set of random numbers. We have also set a function input which is used in runif 
+  
+  set.seed(12) # initializes random number generator to specific start point 
+  x = runif(sample_size)  # runif(n [number of values r to produce randomly ], min = 0, max = 1 - [intervals they can be changed but we are using it in this example])
+  y = sqrt(1-x^2) #[it will square each value of X and will subtract it later on for every new value after squaring it]
+  z = mean(y)
+  return(4*z)
+}
+print(monte_carlo())
+print(monte_carlo(100000))
+print(monte_carlo(1000000))
+```

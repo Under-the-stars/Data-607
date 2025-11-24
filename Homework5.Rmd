@@ -1,0 +1,452 @@
+---
+title: "Principal Component Analysis: A Gentle Tutorial"
+author: "Shobha Gupta"
+date: "2025-10-16"
+output:
+  html_document:
+  toc: true
+  toc_depth: 3
+  number_sections: true
+  theme: united
+bibliography: references.bib
+csl: apa.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.width = 7, fig.height = 5)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+# Overview
+
+Throughout this guide, we’ll move step-by-step from intuition to practice.
+We’ll start by building a clear mental picture of what PCA does and why it’s useful.
+Then, we’ll bring that intuition to life using R, showing you exactly how to perform PCA with the prcomp() function and how to visualize your results in a meaningful way.
+
+Along the way, we’ll answer questions like:
+
+--> What does PCA really do to my data?
+
+--> How can I tell which components are important?
+
+--> How much information am I losing when I reduce dimensions?
+
+--> And how do I interpret the beautiful plots that come out of it?
+
+We’ll reinforce these ideas through hands-on examples:
+
+Two synthetic datasets to help you see how PCA transforms data,
+
+And two real-world examples, where we’ll apply PCA to uncover meaningful structure hidden in actual measurements.
+
+By the end, PCA will no longer feel like a mysterious black box — it will feel like a practical tool you can use to simplify, visualize, and understand your data.
+
+For deeper reading and background, refer to the excellent discussions in @ISLR (Chapter 10), @Jolliffe2002, and @Abdi2010.
+
+# 1 — Intuition: what is PCA?
+
+Imagine you’ve collected a lot of data — maybe dozens of measurements about each person in a study: their height, weight, blood pressure, cholesterol, age, and more.
+Each variable tells you something useful, but together they create a web of information that’s hard to untangle.
+Many of these variables are related — for example, taller people might weigh more, and age might be connected to blood pressure.
+When variables overlap like this, it becomes tricky to see the bigger picture.
+
+Principal Component Analysis (PCA) is a technique that helps us simplify that complexity.
+It finds new axes — called principal components — that summarize the key patterns in the data without losing much information.
+These new components are combinations of the original variables, but arranged in such a way that they capture the directions where the data varies the most.
+
+You can think of PCA as turning your data to a new angle, one where the underlying structure suddenly becomes clearer —
+like rotating a sculpture until you find the viewpoint that best shows its shape.
+
+Here’s what makes PCA special:
+
+It focuses on variability: PCA looks for directions where the data changes the most. These directions often reveal the most meaningful patterns.
+
+It creates independent axes: Each principal component is at a right angle (orthogonal) to the others, so they don’t overlap in the information they capture.
+
+It’s unsupervised: PCA doesn’t rely on labels or outcomes. It simply explores the structure of your data to find the most informative view.
+
+To sum it up we can say that PCA reduces the dimensionality of data while preserving its essential structure.
+It turns a high-dimensional, hard-to-visualize dataset into a simpler one that still tells the same story — just from a clearer perspective (@ISLR).
+
+# 2 — Quick mathematical sketch (short)
+
+When we collect data, each variable tells part of the story — maybe one column records a person’s height, another their weight, and another their age.
+If we plot all those variables together, the data might look like a scattered cloud of points.
+Some directions in that cloud will have more “spread” than others — maybe height and weight vary together, forming a slanted pattern.
+This is what PCA tries to find: the directions where the data naturally spreads out the most.
+
+To do that, we start with something called the covariance matrix.
+Think of it as a summary of how every pair of variables moves together.
+If two features rise and fall together, their covariance is positive; if one increases while the other decreases, it’s negative.
+So the covariance matrix captures the relationships in the data — it tells us which features “go hand in hand.”
+
+Now, once we have that covariance matrix, PCA looks for the main directions of movement in it — the directions where the spread is largest.
+Mathematically, those directions are called eigenvectors, and how much the data spreads along each one is measured by eigenvalues.
+You can imagine drawing arrows through the cloud of data:
+
+The longest arrow points in the direction of the greatest variation — that’s the first principal component.
+
+The second arrow, drawn at a right angle to the first, captures the next most important direction, and so on.
+
+In R, we can find these arrows and their strengths by performing something called an eigen decomposition on the covariance matrix.
+Alternatively, we can use a technique called Singular Value Decomposition (SVD), which does the same thing in a slightly different, often faster way.
+Both approaches are just two paths to the same goal — finding the new set of axes that describe the data in the simplest way possible.
+
+So, to summarize this story:
+
+We begin with a data matrix $X$ (after centering it by subtracting the mean).
+We then calculate how each feature relates to the others using the covariance matrix
+$S = \frac{1}{n-1} X^T X$.
+By finding the eigenvectors and eigenvalues of $S$ (or equivalently by using SVD), we uncover the main directions of variation in the data.
+These directions — the principal components — capture how the data naturally spreads, helping us simplify complex data into clearer patterns (@Jolliffe2002).
+
+# 3 — Hands-on: Synthetic examples
+
+## 3.1 Example 1 — Two-dimensional rotated data (visual intuition)
+To start small, let’s imagine a simple dataset with just two variables that are strongly related — maybe something like a person’s height and weight.
+
+```{r ex1-data}
+set.seed(1)
+n <- 300
+x1 <- rnorm(n)
+x2 <- 0.8*x1 + rnorm(n, sd = 0.6)
+df2 <- data.frame(x1 = x1, x2 = x2)
+
+ggplot(df2, aes(x = x1, y = x2)) + geom_point(alpha = 0.6) +
+  labs(title = 'Synthetic correlated 2D data')
+```
+If you look at the scatterplot, you’ll notice that the points form a slanted oval shape — meaning the two variables are correlated.
+There’s more spread in one direction than in the other.
+
+Let’s use PCA to discover that main direction of spread.
+
+```{r ex1-pca}
+pca2 <- prcomp(df2, center = TRUE, scale. = TRUE)
+summary(pca2)
+
+loadings2 <- pca2$rotation
+pc1 <- loadings2[,1]
+pc2 <- loadings2[,2]
+arrows_df <- data.frame(x = 0, y = 0, xend = pc1*2, yend = pc2*2, comp = c("PC1","PC2"))
+
+ggplot(df2, aes(x = x1, y = x2)) +
+geom_point(alpha = 0.4) +
+geom_segment(data = arrows_df,
+aes(x = x, y = y, xend = xend, yend = yend, color = comp),
+arrow = arrow(length = unit(0.25, "cm")), size = 1.2) +
+coord_equal() +
+labs(title = "PC axes overlaid on data")
+
+```
+Those arrows show the principal components — the directions PCA found.
+The first arrow (PC1) points along the main stretch of the data, capturing the largest variation.
+The second (PC2) is perpendicular and captures what’s left.
+Together, they form a new coordinate system that describes the data more clearly (@ISLR).
+
+
+## 3.2 Example 2 — 3D data projected to 2D
+
+Now, let’s move to three variables.
+Imagine we have data that actually lies on a flat surface (a plane) in three-dimensional space.
+It looks 3D, but most of the variation happens in just two dimensions.
+
+```{r ex2-data}
+set.seed(2)
+n <- 500
+x <- rnorm(n)
+y <- 0.5 * x + rnorm(n, sd = 0.2)
+z <- 0.3 * x - 0.2 * y + rnorm(n, sd = 0.1)
+df3 <- data.frame(x = x, y = y, z = z)
+pairs(df3, main = "Pairs plot of 3D synthetic data")
+
+```
+Let’s use PCA to find out whether this 3D data can really be simplified to 2D.
+
+```{r ex2-pca}
+pca3 <- prcomp(df3, center = TRUE, scale. = TRUE)
+summary(pca3)
+scores3 <- as.data.frame(pca3$x)
+ggplot(scores3, aes(x = PC1, y = PC2)) +
+geom_point(alpha = 0.5) +
+labs(title = "Projection of 3D data onto first two PCs")
+
+```
+Here PCA tells us that almost all the variation lies in the first two components —
+so we can describe the 3D data using just 2D without losing much information (@Jolliffe2002).
+That’s the power of dimensionality reduction.
+
+# 4 — Real dataset example: The Iris Flower
+
+Now let’s move from synthetic to real data.
+The classic Iris dataset records the sepal and petal dimensions of 150 flowers from three species.
+We’ll see whether PCA can separate these species based purely on their measurements.
+
+```{r iris-pca}
+data(iris)
+iris_num <- iris %>% select(-Species)
+
+pca_iris <- prcomp(iris_num, center = TRUE, scale. = TRUE)
+summary(pca_iris)
+
+scores_iris <- as.data.frame(pca_iris$x)
+scores_iris$Species <- iris$Species
+
+ggplot(scores_iris, aes(x = PC1, y = PC2, color = Species)) +
+geom_point(size = 2) +
+labs(title = "Iris data: projection on first two PCs")
+
+```
+Even though PCA doesn’t use the species labels (it’s unsupervised), you can still see clusters forming!
+That’s because flower species differ systematically in sepal and petal size, and PCA captures those differences naturally (@ISLR).
+
+We can also look at the loadings, which tell us how much each original feature contributes to each principal component.
+
+
+```{r iris-loadings}
+loadings_iris <- as.data.frame(pca_iris$rotation)
+loadings_iris$Feature <- rownames(loadings_iris)
+loadings_long <- loadings_iris %>%
+pivot_longer(cols = starts_with("PC"), names_to = "PC", values_to = "Loading")
+
+ggplot(loadings_long, aes(x = PC, y = Feature, fill = Loading)) +
+geom_tile() +
+labs(title = "PCA loadings (Iris)") +
+theme_minimal()
+
+```
+This heatmap shows which measurements matter most for each principal component —
+for example, petal length and width often dominate the first component.
+
+
+# 5 — Explained variance and choosing components to Keep?
+
+After we run PCA, we end up with several new axes — the principal components (PCs).
+But how do we decide which ones are worth keeping and which ones add very little new information?
+
+Let’s build this up gradually.
+
+### 5.1 What does “explained variance” mean?
+
+Each principal component represents a direction in the data where there’s variation.
+Some directions show a lot of spread (the data varies widely there), while others show very little spread (the data barely changes along that axis).
+
+The amount of variation captured by each component is called its explained variance.
+It tells us how much of the total “information” in the dataset that component accounts for.
+
+If your data has 100% total variance across all variables, and:
+
+PC1 captures 70% of it,
+
+PC2 captures 20%,
+
+PC3 captures 5%,
+then keeping just PC1 and PC2 would already explain 90% of the overall variability — a very good summary!
+
+### 5.2 How do we measure it?
+
+When PCA is performed, R computes eigenvalues (or equivalently, the squared singular values) for each component.
+These eigenvalues represent the amount of variance along each principal direction.
+
+To find how much each component contributes, we divide each eigenvalue by the total sum of all eigenvalues.
+This gives the proportion of variance explained (PVE) for each component.
+
+### 5.3 You can think of it like a pie chart:
+
+Each slice = one principal component.
+
+The size of the slice = how much of the total variation that component explains.
+
+Each principal component explains a certain portion of the total variance.
+We can check this using the eigenvalues from our PCA model.
+A common way to decide how many components to keep is to plot the explained variance — known as a scree plot (@Abdi2010).
+
+### 5.4 Visualizing with a scree plot
+
+A scree plot is a visual tool to decide how many components to keep.
+It shows the variance explained by each component, typically as bars or points.
+
+```{r explained-variance}
+var_iris <- pca_iris$sdev^2
+propvar_iris <- var_iris / sum(var_iris)
+cumvar_iris <- cumsum(propvar_iris)
+var_table_iris <- data.frame(
+PC = paste0("PC", 1:length(var_iris)),
+Variance = var_iris,
+PropVar = propvar_iris,
+CumVar = cumvar_iris
+)
+
+var_table_iris
+
+ggplot(var_table_iris, aes(x = as.numeric(sub("PC","",PC)), y = PropVar)) +
+geom_bar(stat = "identity", fill = "skyblue") +
+geom_line(aes(y = CumVar), color = "black", linetype = "dashed") +
+geom_point(aes(y = CumVar), color = "black") +
+scale_x_continuous(breaks = 1:nrow(var_table_iris)) +
+labs(x = "Principal Component",
+y = "Proportion of Variance Explained",
+title = "Scree Plot (Iris)") +
+theme_minimal()
+
+```
+The Scree Plot above shows how much of the total variance in the Iris dataset is explained by each principal component (PC).
+
+Each blue bar represents the proportion of variance explained by an individual component —
+basically, how much of the original “information” in the data that component captures.
+The dashed line connects the cumulative variance, which adds up the contribution of each component as we move along.
+
+Here’s what we can see:
+
+PC1 (the first bar) explains around 74% of the total variance — meaning it captures nearly three-quarters of all the information in the original four measurements (sepal length, sepal width, petal length, petal width).
+This single axis already summarizes most of what’s happening in the data.
+
+PC2 (the second bar) adds about 23% more variance.
+Together, PC1 and PC2 explain roughly 97% of the total variance — that’s almost everything!
+
+PC3 and PC4 contribute very little (just a few percent combined).
+These components mostly capture small fluctuations or noise rather than meaningful structure.
+
+### 5.5 So how many components should we keep?
+
+There’s no single “correct” answer, but we use practical rules to guide our choice.
+
+Cumulative variance rule:
+If a few components together explain 80–90% of the total variance, that’s usually enough.
+In this case, PC1 and PC2 together cover about 97%, so keeping just these two gives us an excellent low-dimensional summary of the data.
+
+Elbow (scree) rule:
+Look at the dashed line — it rises steeply at first (PC1 and PC2) and then flattens out.
+The point where the line starts to flatten is called the “elbow.”
+After that, adding more components doesn’t gain much extra variance.
+Here, the elbow clearly appears after PC2 — meaning anything beyond PC2 adds minimal value.
+
+Interpretability:
+Keeping two components also makes visualization easier —
+we can plot the data in 2D (PC1 vs. PC2) and still retain almost all the information.
+
+```{r explained-variance-3d}
+var3 <- pca3$sdev^2
+propvar3 <- var3 / sum(var3)
+data.frame(PC = paste0('PC',1:length(var3)), PropVar = propvar3, CumVar = cumsum(propvar3))
+```
+
+# 6 — Practical considerations
+
+Now that we understand how PCA works, let’s talk about how to use it responsibly in real-world data analysis.
+PCA is powerful, but it makes a few assumptions — and breaking them can lead to misleading results.
+Here are the most important things to keep in mind:
+
+### 6.1 Always center and scale your data
+
+PCA is sensitive to the scale of your variables.
+If one feature (say, “income”) is measured in thousands, and another (say, “age”) is in years, the large numbers from income will dominate the analysis.
+This happens because PCA looks at variance — and larger numbers naturally have larger variances.
+
+To make sure all variables contribute equally, we usually standardize each column:
+subtract its mean and divide by its standard deviation.
+In R, this happens automatically when you use prcomp(..., scale. = TRUE).
+
+### 6.2 Handle missing data before applying PCA
+
+PCA can’t handle missing values (NAs).
+If your dataset has gaps, fill them using methods like mean imputation, regression imputation, or more advanced tools like multiple imputation before running PCA.
+Otherwise, the computation of the covariance matrix breaks down.
+
+### 6.3 Remember: PCA finds linear patterns
+
+PCA assumes that the important relationships in your data are linear — that is, the data varies along straight-line directions.
+But if your data lies on a curved shape (like a spiral or a circle), PCA may not capture that structure effectively.
+In such cases, you might turn to nonlinear dimensionality reduction methods such as Kernel PCA or t-SNE, which can handle curved relationships better (@Abdi2010).
+
+### 6.4 Interpret the loadings carefully
+
+The loadings tell you how each original variable contributes to each principal component.
+They help you answer questions like:
+
+“Which features drive most of the variation in PC1?”
+
+“What combination of variables defines PC2?”
+
+Examining loadings gives meaning to your new axes — it’s how you interpret what each principal component represents in practical terms.
+
+# 7 — Reconstructing and measuring loss
+PCA isn’t just for reducing dimensions — it also helps us measure how much information we lose when we simplify the data.
+
+Think of PCA like summarizing a long story into a few sentences.
+The more sentences you keep, the closer you stay to the original meaning.
+Here, those “sentences” are the principal components.
+
+After performing PCA, we can rebuild an approximation of the original dataset using only the first few components.
+If we keep all of them, the reconstruction is perfect; if we keep just a few, we get a simpler version that’s close but not exact.
+
+Let’s test this on our Iris data.
+
+```{r reconstruction}
+X <- scale(iris_num, center = TRUE, scale = TRUE)
+U <- pca_iris$rotation
+scores <- pca_iris$x
+
+reconstruct_k <- function(k){
+Xhat <- scores[,1:k, drop=FALSE] %*% t(U[,1:k, drop=FALSE])
+center <- attr(X, "scaled:center")
+scalev <- attr(X, "scaled:scale")
+Xhat_unscaled <- sweep(Xhat, 2, scalev, FUN = "*")
+Xhat_unscaled <- sweep(Xhat_unscaled, 2, center, FUN = "+")
+return(Xhat_unscaled)
+}
+
+mse <- sapply(1:4, function(k){
+mean((as.matrix(iris_num) - reconstruct_k(k))^2)
+})
+data.frame(k = 1:4, MSE = mse)
+
+```
+
+The table shows the mean squared error (MSE) — a measure of how close the reconstructed data is to the original.
+As we keep more components, the reconstruction becomes more accurate (the MSE gets smaller).
+
+With 1 or 2 components, we capture the main structure but lose small details.
+
+With all components, we perfectly reconstruct the original data.
+
+This pattern is what makes PCA so useful for data compression:
+you can represent most of the dataset’s information using only a few principal components instead of every original feature.
+
+In the Iris example, using just the first two components retains over 95% of the variance — a huge reduction from four variables to two dimensions, with almost no loss of meaning (@ISLR).
+
+# 8 - Conclusion 
+
+In this tutorial, we explored Principal Component Analysis (PCA) — not just as a mathematical technique, but as a powerful way to see structure in data.
+
+We began with intuition: PCA finds the directions where data varies the most and uses them to create new, uncorrelated variables called principal components.
+Through synthetic examples, we saw how PCA can take complex, correlated data and express it more simply.
+Then, using real-world datasets like Iris, we discovered that PCA can reveal hidden patterns — such as natural groupings — even without using labels.
+
+We also learned that:
+
+Each principal component explains a portion of the total variance, helping us decide how many to keep.
+
+The first few components often capture most of the information, allowing us to simplify our data without losing meaning.
+
+Centering, scaling, and handling missing data are essential before applying PCA.
+
+PCA’s “loadings” help interpret what each component actually represents in real-world terms.
+
+Finally, we explored how PCA can reconstruct the data and measure how much information is lost when we reduce dimensions — showing that PCA is not just about compression, but also about understanding what matters most in your data.
+
+In essence:
+
+PCA is a lens. It lets us look at data from a new angle — one that highlights patterns, simplifies complexity, and reveals relationships that might otherwise stay hidden.
+
+By mastering PCA, you’ve added a fundamental data analysis skill to your toolkit — one that bridges statistics, machine learning, and data visualization.
+
+# 9 — References
+
+- James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). *An Introduction to Statistical Learning*. https://www.statlearning.com/
+- Jolliffe, I. T. (2002). *Principal Component Analysis*. Springer.
+- Abdi, H., & Williams, L. J. (2010). *Wiley Interdisciplinary Reviews: Computational Statistics*, 2(4), 433–459.
+
+
+---

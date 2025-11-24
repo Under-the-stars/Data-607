@@ -1,0 +1,78 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# include R packages here
+library(ggplot2)
+library(MASS)
+library(tidyverse)
+library(socviz)
+```
+
+
+
+```{r, echo=TRUE}
+library(nycflights13)
+library(tidyverse)
+
+head(flights)
+dim(flights)
+```
+
+#Q1)What does na.rm = True do?
+na.rm =TRUE removes the NA values and compute the results with the rest of the data
+
+
+#Q2) what does summarize() do?
+It’s used to collapse a data frame into summary statistics. Instead of keeping all rows, it reduces the dataset into aggregated values
+
+#Q3) what is the difference between using summarize and using summarise on data that has been grouped?
+
+there’s no difference at all between summarize() and summarise(). summarise() is the original function name, using British spelling. summarize() is just an alias (American spelling). Both work identically, even when the data has been grouped with group_by().
+
+
+
+#Q4) what is better geom_line or geom_point?
+
+We use geom_point() when we want to display individual observations, highlight variation, or spot patterns, clusters, and outliers
+We use geom_line() when your x-axis is continuous and ordered (like time or sequence) and you want to emphasize the trend, progression, or connection between points.
+
+
+
+```{r, echo=TRUE}
+
+flights2<- mutate(flights, gain=arr_delay-dep_delay) 
+summarize(flights2, ave_gain=mean(gain,na.rm=TRUE))
+
+flights_by_day <- group_by(flights, year, month, day)
+summarize(flights_by_day, delay=mean(dep_delay,na.rm=TRUE))
+
+
+
+flights$date <- with(flights, ISOdate(year, month, day))
+flights %>% group_by(date) %>% 
+  summarise(delay=mean(dep_delay,na.rm=TRUE)) %>% 
+  ggplot(., aes(x = date, y = delay)) + geom_line() +
+  labs(x= "Date", y="Average Departure Delay")
+
+
+
+```
+
+#what does stat= "identity"do?
+
+In ggplot2, the argument stat = "identity" tells ggplot to use the values you provide as they are, instead of applying a default statistical transformation.
+
+By default, many geoms (like geom_bar()) use stat = "count", which counts the number of observations. But if your data already has values you want to plot (like frequencies, percentages, or totals), you need stat = "identity".
+
+```{r}
+
+
+flights %>% group_by(carrier) %>% 
+  summarize(delay=mean(dep_delay,na.rm=TRUE)) %>% 
+  ggplot(., aes(x = carrier, y = delay)) + geom_bar(stat="identity")+
+  labs(x= "Carrier", y="Average Departure Delay")
+```

@@ -1,0 +1,263 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Shobha Gupta
+---
+
+# Visual Exploration of the Cleveland Heart Disease Dataset
+
+## Introduction and Agenda
+
+For this analysis, I explored the Cleveland Heart Disease dataset from the UCI Machine Learning Repository to better understand the factors associated with the presence of heart disease. My goal was to uncover patterns in demographic, clinical, and physiological variables that might indicate risk factors for heart disease.
+
+Before diving into the analysis, I cleaned and preprocessed the data to ensure accuracy. I replaced missing values (“?”) with NA and removed incomplete rows. I also converted categorical variables into meaningful factors, such as labeling sex as “Male” or “Female,” chest pain type as “Typical Angina,” “Atypical Angina,” etc., and simplifying the target variable into “No HD” (no heart disease) and “HD” (presence of heart disease). With a clean dataset, I could begin visually exploring relationships between variables to understand which factors might be associated with heart disease.
+```{r}
+library(ggplot2)
+library(dplyr)
+library(readr)
+
+
+# Load Cleveland heart disease dataset
+heart <- read_csv("processed.cleveland.data", col_names = FALSE)
+  # adjust path
+
+
+# assigning names to the column 
+
+names(heart) <- c(
+  "age", "sex", "cp", "trestbps", "chol", "fbs",
+  "restecg", "thalach", "exang", "oldpeak", "slope",
+  "ca", "thal", "target"
+)
+
+#replacing ? with NA
+
+heart[heart == "?"] <- NA
+
+#converting all columns to numeric (some where characters due to '?')
+
+heart <- heart %>%
+  mutate(across(everything(), as.numeric))
+
+#Converting categorical variables to factors with readable labels
+
+heart <- heart %>%
+  # Collapse target values: 0 = No HD, 1–4 = HD
+  mutate(
+    target = ifelse(target > 0, 1, 0),
+    sex = factor(sex, labels = c("Female", "Male")),
+    exang = factor(exang, labels = c("No", "Yes")),
+    cp = factor(cp, labels = c("Typical Angina", "Atypical Angina", "Non-anginal Pain", "Asymptomatic")),
+    slope = factor(slope, labels = c("Upsloping", "Flat", "Downsloping")),
+    thal = factor(thal, labels = c("Normal", "Fixed Defect", "Reversible Defect"))
+  ) %>%
+  mutate(
+    target = factor(target, labels = c("No HD", "HD"))
+  )
+# Removing the rows with missing data
+heart <- na.omit(heart)
+
+
+
+```
+
+A quick checks before plotting
+
+```{r}
+
+# See structure
+glimpse(heart)
+
+# Count how many males/females
+table(heart$sex)
+
+# Check a few variables together
+heart %>% 
+  select(age, sex, chol, thalach, target) %>% 
+  head()
+
+
+```
+The data looks clean and processed which clarifies that I can go ahead and start the plotting
+
+
+
+## Figure 1: Age vs Max Heart Rate, colored by Heart Disease
+
+I began my exploration by examining the relationship between a patient’s age and their maximum heart rate (thalach). Using a scatter plot with linear regression lines for each heart disease group, I observed that maximum heart rate generally declines with age, which aligns with typical cardiovascular aging.
+
+What immediately stood out was that patients with heart disease consistently achieved lower maximum heart rates compared to those without heart disease, even at similar ages. This suggested to me that the presence of heart disease may limit cardiovascular performance and exercise capacity. Seeing this pattern motivated me to explore other physiological and biochemical variables that might also differentiate patients with and without heart disease.
+
+```{r}
+
+ggplot(heart, aes(x = age, y = thalach, color = target)) +
+  geom_point(alpha = 0.7, size = 3) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
+  labs(
+    title = "Max Heart Rate vs Age by Heart Disease Status",
+    x = "Age (years)",
+    y = "Max Heart Rate",
+    color = "Heart Disease"
+  ) +
+  theme_minimal()
+
+
+```
+
+## Figure 2: Cholesterol by Sex, faceted by Chest Pain Type
+
+
+Building on the insights from Figure 1, I turned my attention to cholesterol, a well-known cardiovascular risk factor. I wanted to see how cholesterol levels differ by sex and chest pain type. Using boxplots colored by heart disease and faceted by chest pain type, I could compare these variables in a multivariate way.
+
+I noticed that males with certain chest pain types (typical or atypical angina) tended to have higher cholesterol levels, and patients with heart disease generally exhibited elevated cholesterol across most chest pain types. This analysis allowed me to start connecting physiological measures with symptomatic indicators, deepening my understanding of how these factors might interact with heart disease risk.
+```{r}
+
+# Examining how cholesterol level differ between Males and Females, considering chest pain type
+
+ggplot(heart, aes(x = sex, y = chol, fill = target)) +
+  geom_boxplot(alpha = 0.7) +
+  facet_wrap(~cp) +
+  labs(
+    title = "Cholesterol Levels by Sex and Chest Pain Type",
+    x = "Sex",
+    y = "Cholesterol (mg/dl)",
+    fill = "Heart Disease"
+  ) +
+  theme_minimal()
+
+
+```
+
+## Figure 3: Age Distribution by Heart Disease Status
+
+
+Next, I examined the age distribution of patients, stacked by heart disease status, to understand the demographic context of the dataset.
+
+From this histogram, I saw that heart disease prevalence increased with age, particularly in the 55–70 age range. Very few patients under 40 had heart disease. This confirmed my expectation that age is a strong risk factor and provided context for interpreting the physiological patterns I had observed in Figures 1 and 2.
+
+
+```{r}
+ 
+#Shows the age ranges of patients and the proportion with heart disease: 
+
+ggplot(heart, aes(x = age, fill = target)) +
+  geom_histogram(position = "stack", binwidth = 5, alpha = 0.8) +
+  labs(
+    title = "Age Distribution by Heart Disease Status",
+    x = "Age (years)",
+    y = "Count",
+    fill = "Heart Disease"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+## Figure 4: Oldpeak by Heart Disease, coloured by Exercise - Induced Angina 
+
+I then explored ST depression during exercise (oldpeak), an indicator of cardiac stress. Using jittered points overlaid with a semi-transparent boxplot, colored by exercise-induced angina (exang), I could simultaneously consider heart disease status and symptomatic response.
+
+I observed that patients with both heart disease and exercise-induced angina generally had higher ST depression. This reinforced my understanding that heart disease interacts with clinical symptoms and functional responses, not just demographic or biochemical factors.
+
+```{r}
+# Patients with heart disease and exercise -induced angina tend to show higher ST depression. 
+
+ggplot(heart, aes(x = target, y = oldpeak, color = exang)) +
+  geom_jitter(width = 0.2, size = 2, alpha = 0.7) +
+  geom_boxplot(alpha = 0.3, outlier.shape = NA) +
+  labs(
+    title = "ST Depression by Heart Disease and Exercise-Induced Angina",
+    x = "Heart Disease",
+    y = "Oldpeak (ST depression)",
+    color = "Exercise-Induced Angina"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+## Figure 5: Chest Pain Type vs Heart Disease, filled by Sex
+
+
+After examining ST depression and exercise-induced angina in Figure 4, I became curious about other symptomatic patterns that might differ by heart disease status. While I had explored physiological measures like cholesterol, blood pressure, and maximum heart rate, I had not yet looked at how patients’ chest pain presentations varied. I wanted to understand whether symptom type itself might provide additional insight into heart disease risk and whether these patterns differed between males and females.
+
+To investigate this, I created a dodged bar chart with facets by heart disease, showing the distribution of chest pain types across sexes. From this visualization, I observed that males with heart disease were more likely to report typical angina or asymptomatic chest pain, while females showed a more even distribution across chest pain types. This reinforced the idea that sex differences influence the clinical presentation of heart disease and highlighted the importance of considering these differences when assessing risk and interpreting physiological measures.
+
+```{r}
+
+# Investigate the distribution of chest pain types in patients with and without heart disease, split by sex.
+
+ggplot(heart, aes(x = cp, fill = sex)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~target) +
+  labs(
+    title = "Chest Pain Type Distribution by Heart Disease and Sex",
+    x = "Chest Pain Type",
+    y = "Count",
+    fill = "Sex"
+  ) +
+  theme_minimal()
+
+
+```
+
+## Figure 6: Age vs Resting Blood Pressure, size = Cholesterol, colored by Heart Disease
+
+
+After exploring symptom patterns in Figure 5, I wanted to take a multivariate view of physiological risk factors to see how they combine in patients with heart disease. Up to this point, I had looked at age, cholesterol, maximum heart rate, ST depression, and chest pain type individually or in pairs, but I wanted to understand how these factors interact simultaneously.
+
+I created a scatter plot of age versus resting blood pressure, where point size represents cholesterol and color represents heart disease status. This visualization revealed that patients with heart disease often cluster at higher blood pressure and cholesterol levels, particularly at older ages. Seeing this combination of risk factors reinforced my understanding that heart disease is rarely caused by a single variable; rather, multiple physiological and demographic factors converge to increase risk. This figure naturally built on my previous observations, showing how age, sex, and symptomatic patterns relate to measurable physiological indicators.
+```{r}
+# Multivariate view of risk factors; higher BP and cholesterol are linked to heart disease.
+
+ggplot(heart, aes(x = age, y = trestbps, color = target, size = chol)) +
+  geom_point(alpha = 0.6) +
+  labs(
+    title = "Resting Blood Pressure and Age by Heart Disease, Sized by Cholesterol",
+    x = "Age (years)",
+    y = "Resting BP (mmHg)",
+    color = "Heart Disease",
+    size = "Cholesterol"
+  ) +
+  theme_minimal()
+
+
+
+```
+
+## Figure 7: Average Max Heart Rate by Age Group and Sex
+
+Finally, I wanted to summarize how cardiovascular performance changes with age and sex, connecting back to the patterns I first observed in Figure 1. While the initial scatter plot showed individual data points and regression trends, I wanted a clearer summary of how maximum heart rate declines across age groups and differs between males and females.
+
+I grouped patients by age range and plotted the average maximum heart rate by sex using a line plot with points. This confirmed my earlier observation that max heart rate declines with age, but also highlighted that males generally achieve higher heart rates than females. By combining age and sex in this summary view, I was able to tie together the demographic and physiological insights from my earlier analyses, providing a clear, final picture of how heart disease risk manifests in terms of cardiovascular performance.
+
+```{r}
+
+# Summarize how max heart rate declines with age and differs by sex.
+
+heart <- heart %>%
+  mutate(age_group = cut(age, breaks = seq(29, 78, by = 10)))
+
+ggplot(heart %>% group_by(age_group, sex) %>% summarise(mean_thalach = mean(thalach, na.rm = TRUE)),
+       aes(x = age_group, y = mean_thalach, group = sex, color = sex)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  labs(
+    title = "Average Max Heart Rate by Age Group and Sex",
+    x = "Age Group",
+    y = "Mean Max Heart Rate",
+    color = "Sex"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+# Overall Story and Insights
+
+Through this sequence of visualizations, I explored how demographic, physiological, biochemical, and symptomatic factors relate to heart disease. Age emerged as a primary risk factor, while maximum heart rate, cholesterol, blood pressure, and ST depression helped differentiate patients with and without heart disease. Clinical symptoms, such as chest pain type and exercise-induced angina, interacted with sex and other risk factors, demonstrating the complexity of cardiovascular risk.
+
+By examining these variables together, I was able to tell a cohesive story: heart disease is influenced by a combination of age, sex, physiological performance, biochemical measures, and clinical symptoms. This analysis provides a foundation for further predictive modeling or targeted clinical assessment.
